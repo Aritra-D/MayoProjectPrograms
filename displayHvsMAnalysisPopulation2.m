@@ -10,13 +10,18 @@
 % Adding an option to do cross-validation. Set numFolds to 1 if you do not want to do cross-validation
 % Also adding an option to equalize the stimulus repeats for H0V and H1V
 
-function [mData,typeList1] = displayHvsMAnalysisPopulation2(dataTypeNum,transformType,trialCutoff,normalizeFlag,numFolds,useEqualStimRepsFlag)
+% Adding an option to work with a smaller set of electrodes
+
+function [mData,typeList1] = displayHvsMAnalysisPopulation2(dataTypeNum,transformType,regFlag,trialCutoff,normalizeFlag,numFolds,useEqualStimRepsFlag,numElectrodesToUse,colorToUse)
 
 if ~exist('transformType','var');       transformType=2;                end
+if ~exist('regFlag','var');             regFlag=0;                      end
 if ~exist('trialCutoff','var');         trialCutoff=15;                 end
 if ~exist('normalizeFlag','var');       normalizeFlag=1;                end
 if ~exist('numFolds','var');            numFolds=5;                     end
 if ~exist('useEqualStimRepsFlag','var'); useEqualStimRepsFlag=0;        end
+if ~exist('numElectrodesToUse','var');  numElectrodesToUse=[];          end
+if ~exist('colorToUse','var');          colorToUse=[];                  end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%% Get Data %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 oriChangeList = [2 3]; tpStr = '_TargetOnset'; timePeriod = [-0.5 0]; populationType = 'Stimulated';
@@ -43,14 +48,19 @@ load(fileNameSaveElectrodes);
 
 typeList1 = [{'H0V'} {'H1V'} {'H0I'} {'H1I'} {'M0V'} {'M1V'} {'M0I'} {'M1I'} {'H0N'} {'H1N'} {'M0N'} {'M1N'}];
 
-colorNameList = 'rbg';
-colorName = colorNameList(dataTypeNum);
+if isempty(colorToUse)
+    colorNameList = 'rbg';
+    colorName = colorNameList(dataTypeNum);
+else
+    colorName = colorToUse;
+end
+
 if dataTypeNum==1
-    dataTMP = transformData(spikeData,transformType,dataTypeNum,timePeriod,electrodeArrayList,numFolds,useEqualStimRepsFlag);
+    dataTMP = transformData(spikeData,transformType,dataTypeNum,timePeriod,electrodeArrayList,numFolds,useEqualStimRepsFlag,numElectrodesToUse,regFlag);
 elseif dataTypeNum==2
-    dataTMP = transformData(gammaData,transformType,dataTypeNum,timePeriod,electrodeArrayList,numFolds,useEqualStimRepsFlag);
+    dataTMP = transformData(gammaData,transformType,dataTypeNum,timePeriod,electrodeArrayList,numFolds,useEqualStimRepsFlag,numElectrodesToUse,regFlag);
 elseif dataTypeNum==3
-    dataTMP = transformData(alphaData,transformType,dataTypeNum,timePeriod,electrodeArrayList,numFolds,useEqualStimRepsFlag);
+    dataTMP = transformData(alphaData,transformType,dataTypeNum,timePeriod,electrodeArrayList,numFolds,useEqualStimRepsFlag,numElectrodesToUse,regFlag);
 end
 
 if normalizeFlag
@@ -77,10 +87,10 @@ end
 
 % Plot Data
 mDataTMP = zeros(1,numConditions);
+typeList1ordered = cell(1,numConditions);
 conditionOrder = [4 1 11 10 3 2 12 9 8 5 7 6]; 
 
 for c=1:numConditions
-    
     x = mData{c};
     mtmp = mean(x);
     ntmp = length(x);
@@ -88,20 +98,33 @@ for c=1:numConditions
     errorbar(conditionOrder(c),mtmp,stmp,[colorName 'o']); hold on;
     text(conditionOrder(c)-0.2,mtmp+stmp+0.005,num2str(ntmp));
     mDataTMP(conditionOrder(c)) = mtmp;
+    typeList1ordered(conditionOrder(c)) = typeList1(c);
 end
 plot(mDataTMP,colorName);
 h=gca;
-set(h,'XTick',1:12,'XTickLabel',typeList1);
+set(h,'XTick',1:12,'XTickLabel',typeList1ordered);
 
 end
 
-function newData = transformData(data,transformType,dataTypeNum,timePeriod,electrodeArrayList,numFolds,useEqualStimRepsFlag)
+function newData = transformData(data,transformType,dataTypeNum,timePeriod,electrodeArrayList,numFolds,useEqualStimRepsFlag,numElectrodesToUse,regFlag)
 
 [numSessions,numConditions,~] = size(data);
 newData=cell(numSessions,numConditions);
 
 for s=1:numSessions
     eList = [electrodeArrayList{s}{1};electrodeArrayList{s}{2}]';
+    n1=length(electrodeArrayList{s}{1}); n2=length(electrodeArrayList{s}{2}); % Needed only for TransformType==1
+    eSideList = [zeros(1,n1) ones(1,n2)];
+    if ~isempty(numElectrodesToUse)
+        if n1+n2>numElectrodesToUse % Use a subset of electrodes
+            eIndices = randperm(n1+n2);
+            eIndices = sort(eIndices(1:numElectrodesToUse));
+            eList = eList(eIndices);
+            n1 = length(find(eSideList(eIndices)==0));
+            n2 = length(find(eSideList(eIndices)==1));
+        end
+    end
+    
     if dataTypeNum==1
         data1 = cell2mat(squeeze(data(s,1,eList)))./diff(timePeriod); % H0V
         data2 = cell2mat(squeeze(data(s,2,eList)))./diff(timePeriod); % H1V
@@ -113,8 +136,7 @@ for s=1:numSessions
     [testingIndices1,testingIndices2] = getIndices(size(data1,2),size(data2,2),numFolds,useEqualStimRepsFlag);
 
     % Get the weightVector and projections of data1 and data2
-    n1=length(electrodeArrayList{s}{1}); n2=length(electrodeArrayList{s}{2}); % Needed only for TransformType==1
-    [weightVector,p1,p2,allIndices1,allIndices2] = getProjectionsAndWeightVector(data1,data2,testingIndices1,testingIndices2,transformType,n1,n2);
+    [weightVector,p1,p2,allIndices1,allIndices2] = getProjectionsAndWeightVector(data1,data2,testingIndices1,testingIndices2,transformType,n1,n2,regFlag);
     newData{s,1} = p1(allIndices1);
     newData{s,2} = p2(allIndices2);
     
@@ -135,10 +157,8 @@ newData=cell(numSessions,numConditions);
 
 for s=1:numSessions
     mX = mean(data{s,2});   % Normalized w.r.t H1V condition
-    %   stdX = sqrt((var(data{s,1}) + var(data{s,2}))/2);
     stdX= std(data{s,2});
-    
-    
+
     for c=1:numConditions
         newData{s,c} = (data{s,c}-mX)/stdX;
     end
@@ -175,7 +195,7 @@ else
     end
 end
 end
-function [weightVector,projections1,projections2,fullSetIndices1,fullSetIndices2] = getProjectionsAndWeightVector(data1,data2,testingIndices1,testingIndices2,transformType,n1,n2)
+function [weightVector,projections1,projections2,fullSetIndices1,fullSetIndices2] = getProjectionsAndWeightVector(data1,data2,testingIndices1,testingIndices2,transformType,n1,n2,regFlag)
 
 numFolds = length(testingIndices1);
 fullSetIndices1=[]; fullSetIndices2=[];
@@ -224,9 +244,36 @@ for i=1:numFolds
             label2 = repmat({'H1V'},m2,1);
             labelAll = cat(1,label1,label2);
             dataAll = cat(2,d1,d2);
+
+            if regFlag==0 % No regularization
+                Mdl = fitcdiscr(dataAll',labelAll);
+                
+            elseif regFlag==1 % Only optimize gamma
+                Mdl = fitcdiscr(dataAll',labelAll);
+                [err,gamma,~,~] = cvshrink(Mdl,'NumGamma',20);
+                [~,minIndex] = min(err);
+                if minIndex>1
+                    Mdl.Gamma = gamma(minIndex); % Changing gamma changes the model weights also
+                end
+                
+            elseif regFlag==2 % Optimize gamma and delta
+                Mdl = fitcdiscr(dataAll',labelAll);
+                [err,gamma,delta,~] = cvshrink(Mdl,'NumGamma',20,'numDelta',20);
+                minerr = min(err(:));
+                [x,y] = find(err==minerr);
+                if x(1)>1 || y(1)>1
+                    Mdl.Gamma = gamma(x(1)); % Take the smallest gamma
+                    Mdl.Delta = delta(x(1),y(1)); % Take the smallest delta
+                end
+                
+            elseif regFlag==3 % Hyper optimize gamma and delta
+                rng(1)
+                myOpts.AcquisitionFunctionName = 'expected-improvement-plus';
+                myOpts.ShowPlots = 0;
+                myOpts.Verbose = 0;
+                Mdl = fitcdiscr(X,Y,'OptimizeHyperparameters','auto','HyperparameterOptimizationOptions',myOpts);
+            end
             
-            % LDA using fitcdiscr function of MATLAB
-            Mdl = fitcdiscr(dataAll',labelAll);
             weightVectorTMP(:,i) = Mdl.Coeffs(1,2).Linear;
         end
     end
