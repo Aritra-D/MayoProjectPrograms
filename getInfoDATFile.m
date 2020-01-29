@@ -1,4 +1,4 @@
-function [DAT2,CueOnCode,targetOnTimeMS,orientationChangeDeg,saccadeTimeMS] = getInfoDATFile(DAT)
+function [DAT2,CueOnCode,targetOnTimeMS,orientationChangeDeg,saccadeTimeMS,reactionTimeMS] = getInfoDATFile(DAT)
 i=1; continueFlag=1;
 while(continueFlag)
     tnum = (['t', num2str(i)]);
@@ -20,8 +20,14 @@ while(continueFlag)
         
         if isfield(DAT2{i},'saccade')
             saccadeTimeMS(i) = DAT2{i}.saccade.timeMS - DAT2{i}.trialStart.timeMS;
+            if isfield(DAT2{i},'target')
+                reactionTimeMS(i) = DAT2{i}.saccade.timeMS - DAT2{i}.target.timeMS(1);
+            else
+                reactionTimeMS(i) = 0;
+            end
         else
            saccadeTimeMS(i) = 0;
+           reactionTimeMS(i) = 0;
         end
         
         i=i+1;

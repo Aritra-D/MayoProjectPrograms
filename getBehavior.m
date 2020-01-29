@@ -1,4 +1,4 @@
-function [perCorrect,uniqueOrientationChangeDeg,goodIndexList,orientationChangeDeg] = getBehavior(fileNameString,folderSourceString,neutralTrialFlag)
+function [perCorrect,uniqueOrientationChangeDeg,goodIndexList,orientationChangeDeg,reactionTimeMS] = getBehavior(fileNameString,folderSourceString,neutralTrialFlag)
 
 if ~exist('folderSourceString','var');   folderSourceString='C:\Supratim\Projects\MayoProject\';       end
 if ~exist('neutralTrialFlag','var');    neutralTrialFlag = 0;   end
@@ -13,7 +13,7 @@ DAT = load(fullfile(folderNameIn,fileNameDAT));
 DAT = DAT.(fileNameDAT);
 
 goodIndexList = getGoodIndices(CDS,DAT,[],neutralTrialFlag);
-[~,~,~,orientationChangeDeg,~] = getInfoDATFile(DAT);
+[~,~,~,orientationChangeDeg,~,reactionTimeMS] = getInfoDATFile(DAT);
 
 uniqueOrientationChangeDeg = unique(orientationChangeDeg);
 

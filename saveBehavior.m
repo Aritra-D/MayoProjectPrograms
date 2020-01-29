@@ -11,10 +11,12 @@ fileNameStringListAll=cat(2,fileNameStringList{1},fileNameStringList{2});
 
 for i=1:length(fileNameStringListAll)
     disp(['Working on ' fileNameStringListAll{i}]); 
-    for j=1:3
-        perCorrect{j}=getBehavior(fileNameStringListAll{i},j-1); %#ok<AGROW,NASGU>
-    end
+    [perCorrect,uniqueOrientationChangeDeg,goodIndexList,orientationChangeDeg,reactionTimeMS]=getBehavior(fileNameStringListAll{i},folderSourceString,1);
+    
     fileNameSave=fullfile(folderNameOut,[fileNameStringListAll{i} '_perCorrect']);
     save(fileNameSave,'perCorrect');
+    
+    fileNameSave2=fullfile(folderNameOut,[fileNameStringListAll{i} '_reactionTimes']);
+    save(fileNameSave2,'uniqueOrientationChangeDeg','goodIndexList','orientationChangeDeg','reactionTimeMS');
 end
 end

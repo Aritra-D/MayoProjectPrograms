@@ -12,7 +12,7 @@
 
 % Adding an option to work with a smaller set of electrodes
 
-function [mData,typeList1] = displayHvsMAnalysisPopulation2(dataTypeNum,transformType,regFlag,trialCutoff,normalizeFlag,numFolds,useEqualStimRepsFlag,numElectrodesToUse,colorToUse)
+function [mData,typeList1,dataTMP] = displayHvsMAnalysisPopulation2(dataTypeNum,transformType,regFlag,trialCutoff,normalizeFlag,numFolds,useEqualStimRepsFlag,numElectrodesToUse,colorToUse)
 
 if ~exist('transformType','var');       transformType=2;                end
 if ~exist('regFlag','var');             regFlag=0;                      end
