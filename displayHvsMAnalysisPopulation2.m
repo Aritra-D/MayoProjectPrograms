@@ -1,11 +1,14 @@
+% June 9, 2020: Adding functionality to also run the attention axis using
+% codes provided by Patrick J Mayo.
+
 % This Program is used in displayFigure5, displayFigure5v2 to save the
 % output of this function.
 % The difference between this function and
 % displayHvsMPopulation is that here pooled variance is used for uncorrelated LDA case
 
 % dataTypeNum - 1: spikes, 2: gamma, 3: alpha
-% transformType - 1: simple averaging across sides, 2: LDA-uncorrelated,
-% 3: LDA-covariance
+% transformType - 1: simple averaging across sides, 2: Mean-difference, 3:
+% LDA-uncorrelated, 4: LDA-covariance, 5: Attention Axis 
 
 % Adding an option to do cross-validation. Set numFolds to 1 if you do not want to do cross-validation
 % Also adding an option to equalize the stimulus repeats for H0V and H1V
@@ -14,7 +17,7 @@
 
 function [mData,typeList1,dataTMP] = displayHvsMAnalysisPopulation2(dataTypeNum,transformType,regFlag,trialCutoff,normalizeFlag,numFolds,useEqualStimRepsFlag,numElectrodesToUse,colorToUse)
 
-if ~exist('transformType','var');       transformType=2;                end
+if ~exist('transformType','var');       transformType=4;                end
 if ~exist('regFlag','var');             regFlag=0;                      end
 if ~exist('trialCutoff','var');         trialCutoff=15;                 end
 if ~exist('normalizeFlag','var');       normalizeFlag=1;                end
@@ -136,7 +139,7 @@ for s=1:numSessions
     [testingIndices1,testingIndices2] = getIndices(size(data1,2),size(data2,2),numFolds,useEqualStimRepsFlag);
 
     % Get the weightVector and projections of data1 and data2
-    [weightVector,p1,p2,allIndices1,allIndices2] = getProjectionsAndWeightVector(data1,data2,testingIndices1,testingIndices2,transformType,n1,n2,regFlag);
+    [weightVector,p1,p2,allIndices1,allIndices2,multiDimMean1,multiDimMean2] = getProjectionsAndWeightVector(data1,data2,testingIndices1,testingIndices2,transformType,n1,n2,regFlag);
     newData{s,1} = p1(allIndices1);
     newData{s,2} = p2(allIndices2);
     
@@ -146,7 +149,11 @@ for s=1:numSessions
         else
             dataTMP = cell2mat(squeeze(data(s,c,eList)));
         end
-        newData{s,c} = dataTMP' * weightVector;
+        if transformType==5 % Attention Axis
+            newData{s,c} = projpointline(dataTMP',multiDimMean1',multiDimMean2');
+        else
+            newData{s,c} = dataTMP' * weightVector;
+        end
     end
 end
 end
@@ -195,7 +202,7 @@ else
     end
 end
 end
-function [weightVector,projections1,projections2,fullSetIndices1,fullSetIndices2] = getProjectionsAndWeightVector(data1,data2,testingIndices1,testingIndices2,transformType,n1,n2,regFlag)
+function [weightVector,projections1,projections2,fullSetIndices1,fullSetIndices2,multiDimMean1,multiDimMean2] = getProjectionsAndWeightVector(data1,data2,testingIndices1,testingIndices2,transformType,n1,n2,regFlag)
 
 numFolds = length(testingIndices1);
 fullSetIndices1=[]; fullSetIndices2=[];
@@ -208,9 +215,12 @@ fullSetIndices2 = sort(fullSetIndices2);
 
 projections1 = zeros(size(data1,2),1);
 projections2 = zeros(size(data2,2),1);
+
 D = size(data1,1);
 
 weightVectorTMP = zeros(D,numFolds);
+multiDimMean1TMP = zeros(D,numFolds); % needed for the Attention Axis
+multiDimMean2TMP = zeros(D,numFolds); % needed for the Attention Axis
 
 for i=1:numFolds
     t1 = testingIndices1{i};
@@ -230,7 +240,10 @@ for i=1:numFolds
         d1 = data1(:,train1); d2 = data2(:,train2);
         m1 = size(d1,2); m2 = size(d2,2);
         
-        if transformType==2 % LDA for uncorrelated case       
+        if transformType==2 % Only mean difference
+            weightVectorTMP(:,i) = mean(d1,2) - mean(d2,2);
+            
+        elseif transformType==3 % LDA for uncorrelated case       
             meanDiff = mean(d1,2) - mean(d2,2);
             var1 = var(d1,[],2);
             var2 = var(d2,[],2);
@@ -238,7 +251,7 @@ for i=1:numFolds
             
             weightVectorTMP(:,i) = meanDiff./pooledVar;
             
-        elseif transformType==3 % LDA
+        elseif transformType==4 % LDA
 
             label1 = repmat({'H0V'},m1,1);
             label2 = repmat({'H1V'},m2,1);
@@ -278,9 +291,57 @@ for i=1:numFolds
         end
     end
     
-    projections1(t1) = data1(:,t1)' *  weightVectorTMP(:,i);
-    projections2(t2) = data2(:,t2)' *  weightVectorTMP(:,i);
+    if transformType==5 % JPM Attention Axis - Done separately since it provides both projections and weights
+        multiDimMean1TMP(:,i) = nanmean(d1, 2); % take mean across Hit trials only at Location 0
+        multiDimMean2TMP(:,i) = nanmean(d2, 2);
+        
+        % % First input must be TRIALS (rows) x CHANNELS (columns)
+        [projections1(t1),weightVectorTMP(:,i)] = projpointline(data1(:,t1)',multiDimMean1TMP(:,i)',multiDimMean2TMP(:,i)'); % FUNCTION DEFINED BELOW
+        projections2(t2) = projpointline(data2(:,t2)',multiDimMean1TMP(:,i)',multiDimMean2TMP(:,i)'); % FUNCTION DEFINED BELOW
+
+    else
+        projections1(t1) = data1(:,t1)' *  weightVectorTMP(:,i);
+        projections2(t2) = data2(:,t2)' *  weightVectorTMP(:,i);
+    end
 end
 
 weightVector = mean(weightVectorTMP,2);
+multiDimMean1 = mean(multiDimMean1TMP,2);
+multiDimMean2 = mean(multiDimMean2TMP,2);
+end
+
+% Code provided by Patrick J Mayo.
+function [t, wvTEST] = projpointline(p,a,b) % t is projection
+
+% projection of point p onto line between points a and b
+% output values range from 0-1
+% If input is a matrix, p must be TRIALS (rows) x CHANNELS (columns)
+
+if size(p,1) == 0
+    t=[];
+elseif size(p,1) > 1 % if data input matrix is more than a single trial
+
+    denom = norm(a-b)^2;  % denominator from above; single value regardless of points
+    
+    if size(p,1) ~= size(a,1) && size(p,1) ~= size(b,1) % if point matrix is not same size at mean matrices
+        ar = repmat(a, size(p,1), 1); % copy point A values
+        br = repmat(b, size(p,1), 1); % copy point B values
+        numer = dot((ar-br),ar-p, 2); % dot product along the second dimension
+        t=numer/denom;
+        
+        wvTEST = (a-b)/norm(a-b); % normalized vector from b to a. 
+        
+    else % if input matrices (a, b, p) are already all the same size, no need to use repmat
+        numer = dot((a-b),a-p, 2); % dot product along the second dimension
+        t=numer/denom;
+        
+        wvTEST = (a-b)/norm(a-b); % normalized vector from b to a. 
+    end
+    
+else % if only a single trial, use Marlene's original line of code
+    t=dot((a-b),(a-p))/norm(a-b)^2;
+    wvTEST = (a-b)/norm(a-b); % normalized vector from b to a. 
+end
+
+t=-t; % Projections are reversed in sign to be consistent with other measures
 end
